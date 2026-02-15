@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Theme Editor | Ultimate Fix</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root { --primary: #4f46e5; }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .glass-card { background: white; border: 1px solid #e2e8f0; border-radius: 1.5rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .step-content { display: none; }
+        .step-content.active { display: block; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        #preview-frame { width: 100%; height: 500px; border-radius: 1rem; border: 1px solid #cbd5e1; background: #fff; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="p-4 md:max-w-xl md:mx-auto">
+
+    <header class="py-6 text-center">
+        <h1 class="text-3xl font-black text-indigo-600">Theme AI Pro</h1>
+        <p class="text-gray-500 text-sm">संरचना वही, स्टाइल नया</p>
+    </header>
+
+    <main id="step-1" class="step-content active space-y-4">
+        <div class="glass-card p-6">
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-2">API KEY</label>
+            <input type="password" id="api-key" placeholder="Google AI Studio Key" class="w-full p-4 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="glass-card p-6">
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-2">HTML CODE</label>
+            <textarea id="source-code" rows="8" placeholder="अपना HTML पेस्ट करें" class="w-full p-4 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs"></textarea>
+        </div>
+        <button onclick="goTo(2)" class="w-full bg-indigo-600 text-white py-5 rounded-2xl font-bold shadow-lg">अगला चरण</button>
+    </main>
+
+    <section id="step-2" class="step-content space-y-4">
+        <div class="glass-card p-6 text-center">
+            <h3 class="font-bold text-gray-800 mb-4">कैसी थीम चाहिए?</h3>
+            <textarea id="theme-desc" rows="4" placeholder="उदा: 'Modern Dark Blue theme with rounded buttons'..." class="w-full p-4 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+        </div>
+        <button onclick="startAIProcess()" class="w-full bg-indigo-600 text-white py-5 rounded-2xl font-bold shadow-lg">AI थीम लागू करें 🪄</button>
+        <button onclick="goTo(1)" class="w-full text-gray-400">पीछे जाएँ</button>
+    </section>
+
+    <section id="step-3" class="step-content space-y-4">
+        <iframe id="preview-frame"></iframe>
+        <div class="glass-card p-6">
+            <input type="text" id="filename" value="themed-website.html" class="w-full p-3 border-b mb-4 outline-none text-center font-bold">
+            <button onclick="downloadFile()" class="w-full bg-emerald-500 text-white py-5 rounded-2xl font-bold shadow-lg">डाउनलोड करें ↓</button>
+        </div>
+        <button onclick="location.reload()" class="w-full text-gray-400">नया शुरू करें</button>
+    </section>
+
+    <div id="loader" class="fixed inset-0 bg-white/90 hidden flex-col items-center justify-center z-50">
+        <div class="spinner mb-4"></div>
+        <p class="text-indigo-600 font-bold animate-pulse">AI कोड पर काम कर रहा है...</p>
+    </main>
+
+    <script>
+        let finalHTML = "";
+
+        function goTo(s) {
+            document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(`step-${s}`).classList.add('active');
+        }
+
+        async function startAIProcess() {
+            const key = document.getElementById('api-key').value.trim();
+            const source = document.getElementById('source-code').value.trim();
+            const theme = document.getElementById('theme-desc').value || "Modern Aesthetic";
+            const loader = document.getElementById('loader');
+
+            loader.classList.remove('hidden');
+
+            const prompt = `Act as a Senior Web Designer. Update the visual style of this HTML for a "${theme}" theme. 
+            RULES: 
+            1. ONLY add a <style> block in the <head>. 
+            2. Do NOT touch <body> content or JavaScript. 
+            3. Return the FULL updated HTML code. 
+            Code: ${source}`;
+
+            // Try different model variations to prevent 404
+            const modelVariations = [
+                "gemini-1.5-flash",
+                "gemini-1.5-flash-latest",
+                "gemini-pro"
+            ];
+
+            let success = false;
+            for (const model of modelVariations) {
+                if (success) break;
+                try {
+                    console.log(`Trying model: ${model}...`);
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+                    
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error?.message || "Error");
+
+                    finalHTML = data.candidates[0].content.parts[0].text;
+                    finalHTML = finalHTML.replace(/```html|```/gi, '').trim();
+
+                    const iframe = document.getElementById('preview-frame');
+                    const doc = iframe.contentWindow.document;
+                    doc.open();
+                    doc.write(finalHTML);
+                    doc.close();
+
+                    success = true;
+                    goTo(3);
+                } catch (err) {
+                    console.warn(`Model ${model} failed:`, err.message);
+                }
+            }
+
+            if (!success) {
+                alert("सभी उपलब्ध मॉडल्स फेल हो गए। कृपया अपनी API Key चेक करें या थोड़ी देर बाद प्रयास करें।");
+            }
+            loader.classList.add('hidden');
+        }
+
+        function downloadFile() {
+            const blob = new Blob([finalHTML], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = document.getElementById('filename').value || "site.html";
+            a.click();
+        }
+    </script>
+</body>
+</html>
